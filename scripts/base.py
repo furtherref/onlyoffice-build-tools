@@ -1226,6 +1226,19 @@ def web_apps_addons_param():
 def download(url, dst):
   return cmd_exe("curl", ["-L", "-o", dst, url])
 
+def patch_sdkjs_plugins_runtime_content(content):
+  # GitHub Pages still serves a legacy window.onunload cleanup in sdkjs-plugins/v1/plugins.js.
+  legacy_unload_cleanup = r'b\.onunload=function\(\)\{b\.addEventListener\?\s*b\.removeEventListener\("message",q,!1\):b\.detachEvent\("onmessage",q\)\}'
+  pagehide_cleanup = 'b.addEventListener?b.addEventListener("pagehide",function(){b.removeEventListener("message",q,!1)},!1):b.attachEvent("onunload",function(){b.detachEvent("onmessage",q)})'
+  return re.sub(legacy_unload_cleanup, pagehide_cleanup, content)
+
+def patch_sdkjs_plugins_runtime_file(path):
+  if not is_file(path):
+    return
+  patched_content = patch_sdkjs_plugins_runtime_content(readFileCommon(path))
+  writeFile(path, patched_content)
+  return
+
 def extract(src, dst, is_no_errors=False):
   app = "7za" if ("mac" == host_platform()) else "7z"
   return cmd_exe(app, ["x", "-y", src, "-o" + dst], is_no_errors)
@@ -1589,10 +1602,12 @@ def copy_sdkjs_plugins_server(dst_dir, is_name_as_guid=False, is_desktop_local=F
 
 def support_old_versions_plugins(out_dir):
   if is_file(out_dir + "/pluginBase.js"):
+    patch_sdkjs_plugins_runtime_file(out_dir + "/pluginBase.js")
     return
   download("https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js", out_dir + "/plugins.js")
   download("https://onlyoffice.github.io/sdkjs-plugins/v1/plugins-ui.js", out_dir + "/plugins-ui.js")
   download("https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.css", out_dir + "/plugins.css")
+  patch_sdkjs_plugins_runtime_file(out_dir + "/plugins.js")
   content_plugin_base = ""
   with open(get_path(out_dir + "/plugins.js"), "r") as file:
     content_plugin_base += file.read()
@@ -1601,6 +1616,7 @@ def support_old_versions_plugins(out_dir):
     content_plugin_base += file.read()
   with open(get_path(out_dir + "/pluginBase.js"), "w") as file:
     file.write(content_plugin_base)
+  patch_sdkjs_plugins_runtime_file(out_dir + "/pluginBase.js")
   delete_file(out_dir + "/plugins.js")
   delete_file(out_dir + "/plugins-ui.js")
   return
