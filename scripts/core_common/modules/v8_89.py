@@ -218,9 +218,14 @@ def make():
     
   if not base.is_dir("depot_tools"):
     base.cmd("git", ["clone", "https://chromium.googlesource.com/chromium/tools/depot_tools.git"])
+    # depot_tools HEAD moved to a hermetic python bootstrap (2026-08) that no longer works
+    # for this v8 branch: cipd digests lookup fails and gclient never gets configured.
+    # Pin the last known-good revision and stop depot_tools from self-updating.
+    base.cmd_in_dir("./depot_tools", "git", ["checkout", "-q", "20c06fb00a32148b1ea55e4ce5ca947f00a1286b"], True)
     change_bootstrap()
 
   os.environ["PATH"] = base_dir + "/depot_tools" + os.pathsep + os.environ["PATH"]
+  base.set_env("DEPOT_TOOLS_UPDATE", "0")
 
   if ("windows" == base.host_platform()):
     base.set_env("DEPOT_TOOLS_WIN_TOOLCHAIN", "0")
